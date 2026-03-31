@@ -10,7 +10,10 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin("http://localhost:5173")
+@CrossOrigin(origins = {
+        "http://localhost:5173",
+        "https://front-chat-vert.vercel.app"
+})
 public class AuthController {
 
     private final OtpService otpService;
