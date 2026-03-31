@@ -46,11 +46,11 @@ public class AuthController {
 
         String otp = otpService.generateOtp(email);
 
-        boolean sent = emailService.sendOtp(email, otp);
-
-        if(!sent){
-            return ResponseEntity.badRequest().body("Failed to send OTP");
-        }
+//        boolean sent = emailService.sendOtp(email, otp);
+//
+//        if(!sent){
+//            return ResponseEntity.badRequest().body("Failed to send OTP");
+//        }
 
         return ResponseEntity.ok("OTP Sent Successfully");
     }
