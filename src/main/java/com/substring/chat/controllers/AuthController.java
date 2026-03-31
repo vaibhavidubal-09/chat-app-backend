@@ -8,6 +8,8 @@ import com.substring.chat.services.EmailService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/auth")
 @CrossOrigin(origins = {
@@ -29,9 +31,15 @@ public class AuthController {
     }
 
     // ================= SEND OTP =================
+//    @PostMapping("/send-otp")
+//    public ResponseEntity<?> sendOtp(@RequestParam String email,
+//                                     @RequestParam String role)
+//
     @PostMapping("/send-otp")
-    public ResponseEntity<?> sendOtp(@RequestParam String email,
-                                     @RequestParam String role) {
+    public ResponseEntity<?> sendOtp(@RequestBody Map<String, String> body) {
+
+        String email = body.get("email");
+        String role = body.get("role");
 
         User user = userRepository.findByEmail(email).orElse(null);
 
@@ -46,11 +54,11 @@ public class AuthController {
 
         String otp = otpService.generateOtp(email);
 
-//        boolean sent = emailService.sendOtp(email, otp);
-//
-//        if(!sent){
-//            return ResponseEntity.badRequest().body("Failed to send OTP");
-//        }
+       boolean sent = emailService.sendOtp(email, otp);
+
+        if(!sent){
+           return ResponseEntity.badRequest().body("Failed to send OTP");
+      }
 
         return ResponseEntity.ok("OTP Sent Successfully");
     }
