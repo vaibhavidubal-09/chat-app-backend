@@ -10,7 +10,10 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/files")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {
+        "http://localhost:5173",
+        "https://front-chat-vert.vercel.app"
+})
 public class FileController {
 
     private static final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads/";
@@ -51,10 +54,10 @@ public class FileController {
             file.transferTo(destination);
 
             // Return file URL
-            String fileUrl = "/uploads/" + fileName;
+            // Return file URL
+            String fileUrl = "https://chat-app-backend-po82.onrender.com/uploads/" + fileName;
 
             return ResponseEntity.ok(fileUrl);
-
         } catch (Exception e) {
 
             e.printStackTrace();
