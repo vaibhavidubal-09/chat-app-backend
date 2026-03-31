@@ -31,7 +31,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         registry.addEndpoint("/chat")
                 .setAllowedOriginPatterns("http://localhost:5173",
-                        "https://front-chat-vert.vercel.app")
+                        "https://front-chat-vert.vercel.app",
+                        "https://*.vercel.app")
                 .withSockJS();
     }
 }
