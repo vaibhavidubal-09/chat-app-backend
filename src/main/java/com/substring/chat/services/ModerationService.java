@@ -30,7 +30,7 @@ public class ModerationService {
                     "Script injection pattern detected", "HIGH"),
             new PatternRule(Pattern.compile("(drop\\s+table|delete\\s+from|truncate\\s+table)", Pattern.CASE_INSENSITIVE),
                     "Database attack pattern detected", "HIGH"),
-            new PatternRule(Pattern.compile("(kill yourself|self harm|suicide)", Pattern.CASE_INSENSITIVE),
+            new PatternRule(Pattern.compile("(kill yourself|self harm|suicide|kill you|kill him|kill her|i('|\\s)?ll kill|murder|stab you|shoot you)", Pattern.CASE_INSENSITIVE),
                     "Self-harm or violent language detected", "HIGH"),
             new PatternRule(Pattern.compile("(otp\\s*share|share\\s+password|bank\\s+account|upi\\s+pin)", Pattern.CASE_INSENSITIVE),
                     "Sensitive credential or payment phrase detected", "HIGH")
