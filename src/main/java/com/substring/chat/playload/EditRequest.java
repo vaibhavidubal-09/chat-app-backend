@@ -4,6 +4,7 @@ public class EditRequest {
 
     private String messageId;
     private String content;
+    private String authToken;
 
     public EditRequest(){}
 
@@ -12,4 +13,12 @@ public class EditRequest {
 
     public String getContent(){ return content; }
     public void setContent(String content){ this.content=content; }
+
+    public String getAuthToken() {
+        return authToken;
+    }
+
+    public void setAuthToken(String authToken) {
+        this.authToken = authToken;
+    }
 }

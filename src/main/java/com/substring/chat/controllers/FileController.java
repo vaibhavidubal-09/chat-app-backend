@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -17,14 +18,24 @@ import java.util.UUID;
 public class FileController {
 
     private static final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads/";
+    private final com.substring.chat.services.SessionService sessionService;
+
+    public FileController(com.substring.chat.services.SessionService sessionService) {
+        this.sessionService = sessionService;
+    }
 
     // ============================================================
     // 📂 FILE UPLOAD
     // ============================================================
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(
+            @RequestHeader(value = "X-Auth-Token", required = false) String token,
             @RequestParam("file") MultipartFile file
     ) {
+
+        if (!isAuthenticated(token)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
 
         try {
 
@@ -67,5 +78,9 @@ public class FileController {
                     .body("File upload failed");
 
         }
+    }
+
+    private boolean isAuthenticated(String token) {
+        return token != null && !sessionService.getEmail(token).isBlank();
     }
 }

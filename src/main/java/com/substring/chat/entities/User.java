@@ -27,6 +27,9 @@ public class User {
     @Builder.Default
     private boolean verified = false;
 
+    // BCrypt-hashed password for login
+    private String passwordHash;
+
     // TEACHER or STUDENT
     private String role;
 

@@ -11,6 +11,7 @@ import com.substring.chat.repositories.RoomRepository;
 import com.substring.chat.repositories.UserRepository;
 import com.substring.chat.services.EmailService;
 import com.substring.chat.services.ModerationService;
+import com.substring.chat.services.SessionService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
@@ -36,6 +37,7 @@ public class ChatController {
     private final SimpMessagingTemplate template;
     private final EmailService emailService;
     private final ModerationService moderationService;
+    private final SessionService sessionService;
 
     private static final Map<String, Set<String>> onlineUsers = new HashMap<>();
 
@@ -43,20 +45,25 @@ public class ChatController {
                           UserRepository userRepository,
                           SimpMessagingTemplate template,
                           EmailService emailService,
-                          ModerationService moderationService) {
+                          ModerationService moderationService,
+                          SessionService sessionService) {
         this.roomRepository = roomRepository;
         this.userRepository = userRepository;
         this.template = template;
         this.emailService = emailService;
         this.moderationService = moderationService;
+        this.sessionService = sessionService;
     }
 
     @MessageMapping("/sendMessage/{roomId}")
     public void sendMessage(@DestinationVariable String roomId,
                             MessageRequest request) {
 
+        String senderEmail = normalizeEmail(request.getSender());
+        assertAuthenticated(request.getAuthToken(), senderEmail);
+
         Room room = getRoom(roomId);
-        User sender = getUser(request.getSender());
+        User sender = getUser(senderEmail);
 
         initializeRoomCollections(room);
         assertCanSend(room, sender);
@@ -78,7 +85,10 @@ public class ChatController {
 
     @MessageMapping("/blockStudent/{roomId}")
     public void blockStudent(@DestinationVariable String roomId,
-                             String email) {
+                             Map<String, Object> payload) {
+
+        String email = normalizeEmail(asString(payload.get("email")));
+        assertAuthenticated(asString(payload.get("authToken")), email);
 
         Room room = getRoom(roomId);
         initializeRoomCollections(room);
@@ -91,7 +101,10 @@ public class ChatController {
 
     @MessageMapping("/startMeeting/{roomId}")
     public void startMeeting(@DestinationVariable String roomId,
-                             String teacherEmail) {
+                             Map<String, Object> payload) {
+
+        String teacherEmail = normalizeEmail(asString(payload.get("teacherEmail")));
+        assertAuthenticated(asString(payload.get("authToken")), teacherEmail);
 
         Room room = getRoom(roomId);
 
@@ -115,7 +128,10 @@ public class ChatController {
 
     @MessageMapping("/stopMeeting/{roomId}")
     public void stopMeeting(@DestinationVariable String roomId,
-                            String teacherEmail) {
+                            Map<String, Object> payload) {
+
+        String teacherEmail = normalizeEmail(asString(payload.get("teacherEmail")));
+        assertAuthenticated(asString(payload.get("authToken")), teacherEmail);
 
         Room room = getRoom(roomId);
 
@@ -137,6 +153,7 @@ public class ChatController {
 
         Message roomMessage = findMessage(room.getMessages(), req.getMessageId());
         if (roomMessage != null) {
+            assertAuthenticated(req.getAuthToken(), roomMessage.getSender());
             roomMessage.setContent(req.getContent());
             roomMessage.setEdited(true);
             roomRepository.save(room);
@@ -146,6 +163,7 @@ public class ChatController {
 
         Message privateMessage = findMessage(room.getPrivateMessages(), req.getMessageId());
         if (privateMessage != null) {
+            assertAuthenticated(req.getAuthToken(), privateMessage.getSender());
             privateMessage.setContent(req.getContent());
             privateMessage.setEdited(true);
             roomRepository.save(room);
@@ -159,7 +177,12 @@ public class ChatController {
 
     @MessageMapping("/delete/{roomId}")
     public void delete(@DestinationVariable String roomId,
-                       String messageId) {
+                       Map<String, Object> payload) {
+
+        String messageId = asString(payload.get("messageId"));
+        String authToken = asString(payload.get("authToken"));
+        String senderEmail = normalizeEmail(asString(payload.get("sender")));
+        assertAuthenticated(authToken, senderEmail);
 
         Room room = getRoom(roomId);
         initializeRoomCollections(room);
@@ -188,6 +211,8 @@ public class ChatController {
     @SendTo("/topic/typing/{roomId}")
     public Map<String, Object> typing(@DestinationVariable String roomId,
                                       Map<String, Object> payload) {
+        assertAuthenticated(asString(payload.get("authToken")), normalizeEmail(asString(payload.get("user"))));
+        payload.remove("authToken");
         return payload;
     }
 
@@ -201,6 +226,7 @@ public class ChatController {
         String recipientEmail = normalizeEmail(asString(payload.get("recipient")));
         boolean typing = Boolean.TRUE.equals(payload.get("typing"));
 
+        assertAuthenticated(asString(payload.get("authToken")), senderEmail);
         validatePrivateParticipants(room, senderEmail, recipientEmail);
 
         SocketEventPayload event = SocketEventPayload.builder()
@@ -218,7 +244,10 @@ public class ChatController {
     @MessageMapping("/join/{roomId}")
     @SendTo("/topic/online/{roomId}")
     public Set<String> join(@DestinationVariable String roomId,
-                            String email) {
+                            Map<String, Object> payload) {
+
+        String email = normalizeEmail(asString(payload.get("email")));
+        assertAuthenticated(asString(payload.get("authToken")), email);
 
         Room room = getRoom(roomId);
 
@@ -241,6 +270,7 @@ public class ChatController {
 
         String messageId = asString(payload.get("messageId"));
         String user = normalizeEmail(asString(payload.get("user")));
+        assertAuthenticated(asString(payload.get("authToken")), user);
 
         Message roomMessage = findMessage(room.getMessages(), messageId);
         if (roomMessage != null) {
@@ -492,5 +522,11 @@ public class ChatController {
 
     private String asString(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private void assertAuthenticated(String token, String email) {
+        if (!sessionService.isValid(token, email)) {
+            throw new RuntimeException("Unauthorized");
+        }
     }
 }

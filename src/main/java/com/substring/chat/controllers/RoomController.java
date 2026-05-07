@@ -6,6 +6,7 @@ import com.substring.chat.entities.User;
 import com.substring.chat.playload.SocketEventPayload;
 import com.substring.chat.repositories.RoomRepository;
 import com.substring.chat.repositories.UserRepository;
+import com.substring.chat.services.SessionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,26 +33,29 @@ public class RoomController {
 
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final SessionService sessionService;
     private final SimpMessagingTemplate template;
 
     public RoomController(RoomRepository roomRepository,
                           UserRepository userRepository,
+                          SessionService sessionService,
                           SimpMessagingTemplate template) {
         this.roomRepository = roomRepository;
         this.userRepository = userRepository;
+        this.sessionService = sessionService;
         this.template = template;
     }
 
     @PostMapping("/create")
-    public ResponseEntity<?> createRoom(@RequestBody Map<String, String> data) {
+    public ResponseEntity<?> createRoom(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                        @RequestBody Map<String, String> data) {
 
         String teacherEmail = normalizeEmail(data.get("email"));
         String roomName = data.get("roomName");
 
-        User teacher = userRepository.findByEmail(teacherEmail).orElse(null);
-
-        if (teacher == null || !teacher.isVerified()) {
-            return ResponseEntity.badRequest().body("User not verified");
+        User teacher = authenticatedUser(token, teacherEmail);
+        if (teacher == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
         }
 
         if (!"TEACHER".equalsIgnoreCase(teacher.getRole())) {
@@ -80,7 +85,12 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}")
-    public ResponseEntity<?> getRoom(@PathVariable String roomId) {
+    public ResponseEntity<?> getRoom(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                     @PathVariable String roomId) {
+
+        if (!isAuthenticated(token)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
 
         Room room = roomRepository.findByRoomId(roomId).orElse(null);
 
@@ -93,15 +103,15 @@ public class RoomController {
     }
 
     @PostMapping("/join")
-    public ResponseEntity<?> joinRoom(@RequestBody Map<String, String> data) {
+    public ResponseEntity<?> joinRoom(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                      @RequestBody Map<String, String> data) {
 
         String roomId = data.get("roomId");
         String email = normalizeEmail(data.get("email"));
 
-        User user = userRepository.findByEmail(email).orElse(null);
-
-        if (user == null || !user.isVerified()) {
-            return ResponseEntity.badRequest().body("User not verified");
+        User user = authenticatedUser(token, email);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
         }
 
         Room room = roomRepository.findByRoomId(roomId).orElse(null);
@@ -126,14 +136,23 @@ public class RoomController {
     }
 
     @PostMapping("/addStudent")
-    public ResponseEntity<?> addStudent(@RequestBody Map<String, String> data) {
+    public ResponseEntity<?> addStudent(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                        @RequestBody Map<String, String> data) {
 
         String roomId = data.get("roomId");
         String teacherEmail = normalizeEmail(data.get("teacherEmail"));
         String studentEmail = normalizeEmail(data.get("studentEmail"));
 
-        Room room = roomRepository.findByRoomId(roomId).orElse(null);
+        User teacher = authenticatedUser(token, teacherEmail);
+        if (teacher == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Only class teacher can add students");
+        }
 
+        Room room = roomRepository.findByRoomId(roomId).orElse(null);
         if (room == null) {
             return ResponseEntity.badRequest().body("Room not found");
         }
@@ -157,17 +176,21 @@ public class RoomController {
     }
 
     @PostMapping("/activate")
-    public ResponseEntity<?> activateStudent(@RequestBody Map<String, String> data) {
+    public ResponseEntity<?> activateStudent(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                             @RequestBody Map<String, String> data) {
 
         String roomId = data.get("roomId");
         String teacherEmail = normalizeEmail(data.get("teacherEmail"));
         String studentEmail = normalizeEmail(data.get("studentEmail"));
 
-        User teacher = userRepository.findByEmail(teacherEmail).orElse(null);
+        User teacher = authenticatedUser(token, teacherEmail);
+        if (teacher == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
         User student = userRepository.findByEmail(studentEmail).orElse(null);
         Room room = roomRepository.findByRoomId(roomId).orElse(null);
 
-        if (teacher == null || !"TEACHER".equalsIgnoreCase(teacher.getRole())) {
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body("Only teacher can activate");
         }
@@ -203,17 +226,21 @@ public class RoomController {
     }
 
     @PostMapping("/block")
-    public ResponseEntity<?> blockStudent(@RequestBody Map<String, String> data) {
+    public ResponseEntity<?> blockStudent(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                          @RequestBody Map<String, String> data) {
 
         String roomId = data.get("roomId");
         String teacherEmail = normalizeEmail(data.get("teacherEmail"));
         String studentEmail = normalizeEmail(data.get("studentEmail"));
 
-        User teacher = userRepository.findByEmail(teacherEmail).orElse(null);
+        User teacher = authenticatedUser(token, teacherEmail);
+        if (teacher == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
         User student = userRepository.findByEmail(studentEmail).orElse(null);
         Room room = roomRepository.findByRoomId(roomId).orElse(null);
 
-        if (teacher == null || !"TEACHER".equalsIgnoreCase(teacher.getRole())) {
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body("Only teacher can block");
         }
@@ -251,11 +278,15 @@ public class RoomController {
     }
 
     @GetMapping("/teacher/{email}")
-    public ResponseEntity<?> getTeacherClasses(@PathVariable String email) {
+    public ResponseEntity<?> getTeacherClasses(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                               @PathVariable String email) {
 
-        User teacher = userRepository.findByEmail(normalizeEmail(email)).orElse(null);
+        User teacher = authenticatedUser(token, normalizeEmail(email));
+        if (teacher == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
 
-        if (teacher == null || !"TEACHER".equalsIgnoreCase(teacher.getRole())) {
+        if (!"TEACHER".equalsIgnoreCase(teacher.getRole())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body("Access denied");
         }
@@ -266,9 +297,13 @@ public class RoomController {
     }
 
     @GetMapping("/student/{email}")
-    public ResponseEntity<?> getStudentClasses(@PathVariable String email) {
+    public ResponseEntity<?> getStudentClasses(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                               @PathVariable String email) {
 
         String normalizedEmail = normalizeEmail(email);
+        if (!isAuthenticated(token, normalizedEmail)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
 
         List<Room> rooms = roomRepository.findAll()
                 .stream()
@@ -279,7 +314,12 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}/messages")
-    public ResponseEntity<?> getMessages(@PathVariable String roomId) {
+    public ResponseEntity<?> getMessages(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                         @PathVariable String roomId) {
+
+        if (!isAuthenticated(token)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
 
         Room room = roomRepository.findByRoomId(roomId).orElse(null);
 
@@ -292,12 +332,17 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}/private-messages")
-    public ResponseEntity<?> getPrivateMessages(@PathVariable String roomId,
+    public ResponseEntity<?> getPrivateMessages(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                                @PathVariable String roomId,
                                                 @RequestParam String userEmail,
                                                 @RequestParam String peerEmail) {
 
         String normalizedUserEmail = normalizeEmail(userEmail);
         String normalizedPeerEmail = normalizeEmail(peerEmail);
+
+        if (!isAuthenticated(token, normalizedUserEmail)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
 
         Room room = roomRepository.findByRoomId(roomId).orElse(null);
 
@@ -396,5 +441,24 @@ public class RoomController {
 
     private String topicKey(String email) {
         return normalizeEmail(email).replaceAll("[^a-z0-9]", "_");
+    }
+
+    private boolean isAuthenticated(String token) {
+        return token != null && !sessionService.getEmail(token).isBlank();
+    }
+
+    private boolean isAuthenticated(String token, String email) {
+        return token != null && sessionService.isValid(token, email);
+    }
+
+    private User authenticatedUser(String token, String email) {
+        if (!isAuthenticated(token, email)) {
+            return null;
+        }
+        User user = userRepository.findByEmail(normalizeEmail(email)).orElse(null);
+        if (user == null || !user.isVerified()) {
+            return null;
+        }
+        return user;
     }
 }

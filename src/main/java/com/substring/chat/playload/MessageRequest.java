@@ -9,6 +9,7 @@ public class MessageRequest {
     private String roomId;
     private String recipient;
     private boolean privateMessage;
+    private String authToken;
 
     private String replyTo;
 
@@ -69,6 +70,14 @@ public class MessageRequest {
 
     public void setPrivateMessage(boolean privateMessage) {
         this.privateMessage = privateMessage;
+    }
+
+    public String getAuthToken() {
+        return authToken;
+    }
+
+    public void setAuthToken(String authToken) {
+        this.authToken = authToken;
     }
 
     public String getReplyTo() {
